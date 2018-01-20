@@ -94,7 +94,7 @@ class MollieDriver implements IDealInterface
     /**
      * {@inheritdoc}
      */
-    public function execute(Bank $bank, $amount, $routeName)
+    public function execute(Bank $bank, $amount, $description, $routeName, $orderId)
     {
         $token = md5(uniqid('mollie_'));
 
@@ -107,13 +107,13 @@ class MollieDriver implements IDealInterface
         try {
             $payment = $this->mollie->payments->create([
                 'amount'      => $amount,
-                'description' => $this->description,
+                'description' => $description,
                 'redirectUrl' => $redirectUrl,
                 'method'      => Mollie_API_Object_Method::IDEAL,
                 'issuer'      => $bank->getId(),
             ]);
 
-            $this->filesystem->dumpFile($this->getFilePath($token), $payment->id);
+            $this->filesystem->dumpFile($this->getFilePath($token), json_encode(array('id' => $payment->id, 'orderId' => $orderId)));
             $this->eventDispatcher->dispatch(PaymentEvents::PAYMENT_PLACED, new PaymentPlacedEvent(new \DateTime('now'), $amount, $payment->id, $payment->status));
 
             return new RedirectResponse($payment->getPaymentUrl());
@@ -139,7 +139,8 @@ class MollieDriver implements IDealInterface
         }
 
         try {
-            $key = file_get_contents($this->getFilePath($token));
+            $json = json_decode(file_get_contents($this->getFilePath($token)), true);
+            $key = $json['id'];
             $payment = $this->mollie->payments->get($key);
 
             if ($payment->isPaid() === true) {
@@ -147,7 +148,7 @@ class MollieDriver implements IDealInterface
                 $this->eventDispatcher->dispatch(PaymentEvents::PAYMENT_SUCCESS, new PaymentSuccessEvent(new \DateTime('now'), $payment->amount, $payment->id, $payment->status));
                 $this->filesystem->remove($this->getFilePath($token));
 
-                return true;
+                return $json['orderId'];
             }
 
             $this->eventDispatcher->dispatch(PaymentEvents::PAYMENT_FAILED, new PaymentFailedEvent(new \DateTime('now'), $payment->amount, $payment->id, $payment->status));
