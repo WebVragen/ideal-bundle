@@ -31,7 +31,7 @@ interface IDealInterface
      *
      * @return RedirectResponse
      */
-    public function execute(Bank $bank, $amount, $routeName);
+    public function execute(Bank $bank, $amount, $description, $routeName, $orderId);
 
     /**
      * @param Request $request
